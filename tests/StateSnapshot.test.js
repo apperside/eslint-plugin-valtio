@@ -396,6 +396,27 @@ ruleTester.run('state-snapshot-rule', rule, {
        return <div>{doubled}</div>
      }
      `,
+    // Valid: proxy used in event handler (not component body)
+    `
+     const state = proxy({ count: 0 })
+     function MyComponent() {
+       const handleClick = () => {
+         console.log(state.count) // This is OK
+       }
+       const snap = useSnapshot(state)
+       return <div onClick={handleClick}>{snap.count}</div>
+     }
+     `,
+    // Valid: proxy used in useEffect (not component body)
+    `
+     import myProxy from './myProxy'
+     const MyComponent = () => {
+       useEffect(() => {
+         console.log(myProxy.value) // This is OK
+       }, [])
+       return <div></div>
+     }
+     `,
   ],
   invalid: [
     // Test case for imported proxy - should trigger PROXY_RENDER_PHASE_MESSAGE
@@ -508,6 +529,41 @@ ruleTester.run('state-snapshot-rule', rule, {
      `,
       errors: [PROXY_RENDER_PHASE_MESSAGE],
     },
+    // Test case for proxy used in component body - should trigger error
+    {
+      code: `
+     const state = proxy({ count: 0 })
+     function MyComponent() {
+       console.log(state.count) // This should be flagged
+       const snap = useSnapshot(state)
+       return <div>{snap.count}</div>
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for imported proxy used in component body - should trigger error
+    {
+      code: `
+     import myProxy from './myProxy'
+     const MyComponent = () => {
+       console.log(myProxy.value) // This should be flagged
+       return <div></div>
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for proxy used in arrow function component body
+    {
+      code: `
+     import { state } from './store'
+     const Counter = () => {
+       const value = state.count // This should be flagged
+       const snap = useSnapshot(state)
+       return <div>{snap.count}</div>
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
     {
       code: `
      const state = proxy({ count: 0})
@@ -521,7 +577,13 @@ ruleTester.run('state-snapshot-rule', rule, {
        )
      }
      `,
-      errors: [PROXY_RENDER_PHASE_MESSAGE, PROXY_RENDER_PHASE_MESSAGE],
+      errors: [
+        PROXY_RENDER_PHASE_MESSAGE,
+        PROXY_RENDER_PHASE_MESSAGE,
+        PROXY_RENDER_PHASE_MESSAGE,
+        PROXY_RENDER_PHASE_MESSAGE,
+        PROXY_RENDER_PHASE_MESSAGE,
+      ],
     },
     {
       code: `

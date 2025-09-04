@@ -454,9 +454,12 @@ var StateSnapshot = {
               node: node,
               message: PROXY_RENDER_PHASE_MESSAGE,
             })
-          }
-
-          if (isInUseMemo(node)) {
+          } else if (isInUseMemo(node)) {
+            return context.report({
+              node: node,
+              message: PROXY_RENDER_PHASE_MESSAGE,
+            })
+          } else if (isInComponentBody(node)) {
             return context.report({
               node: node,
               message: PROXY_RENDER_PHASE_MESSAGE,
@@ -839,6 +842,118 @@ function getRootIdentifierName(node) {
   }
 
   return null
+}
+
+function isInComponentBody(node) {
+  var componentFunction = findParentComponent(node)
+
+  if (!componentFunction) {
+    return false
+  }
+
+  if (isInJSXContainer(node)) {
+    return false
+  }
+
+  if (isInReactHooks(node)) {
+    return false
+  }
+
+  if (isInCallback(node)) {
+    return false
+  }
+
+  if (isInReturnStatement(node)) {
+    return false
+  }
+
+  if (isPassedToUseSnapshot(node)) {
+    return false
+  }
+
+  return true
+}
+
+function isPassedToUseSnapshot(node) {
+  var current = node.parent
+
+  while (current) {
+    if (
+      current.type === 'CallExpression' &&
+      current.callee &&
+      current.callee.name === 'useSnapshot'
+    ) {
+      return current.arguments.some(function (arg) {
+        return isNodeWithinArgument(node, arg)
+      })
+    }
+
+    current = current.parent
+  }
+
+  return false
+}
+
+function isNodeWithinArgument(node, argument) {
+  var current = node
+
+  while (current && current !== argument.parent) {
+    if (current === argument) {
+      return true
+    }
+
+    current = current.parent
+  }
+
+  return false
+}
+
+function findParentComponent(node) {
+  var current = node
+
+  while (current && current.parent) {
+    current = current.parent
+
+    if (current.type === 'ArrowFunctionExpression') {
+      var varDef = getParentOfNodeType(current, 'VariableDeclarator')
+
+      if (varDef && varDef.id && varDef.id.name) {
+        var name = varDef.id.name
+
+        if (isComponentName(name)) {
+          return current
+        }
+      }
+    }
+
+    if (current.type === 'FunctionDeclaration') {
+      if (current.id && current.id.name && isComponentName(current.id.name)) {
+        return current
+      }
+    }
+
+    if (current.type === 'FunctionExpression') {
+      if (current.id && current.id.name && isComponentName(current.id.name)) {
+        return current
+      }
+    }
+  }
+
+  return null
+}
+
+function isInReturnStatement(node) {
+  var current = node
+
+  while (current && current.parent) {
+    if (current.parent.type === 'ReturnStatement') {
+      return true
+    }
+
+    current = current.parent
+  }
+
+  return false
 }
 
 function isNodeInsideFunction(node, functionNode) {

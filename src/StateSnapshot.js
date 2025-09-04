@@ -9,6 +9,7 @@ import {
   isInReactHooks,
   isInSomething,
   isReadOnly,
+  isComponentName,
 } from './lib/utils'
 
 export const PROXY_RENDER_PHASE_MESSAGE =
@@ -96,14 +97,18 @@ export default {
         const kind = which(node.name, scope)
 
         if (kind === 'state') {
+          // Check in order of specificity to avoid double-flagging
           if (isInRender(node)) {
             return context.report({
               node,
               message: PROXY_RENDER_PHASE_MESSAGE,
             })
-          }
-
-          if (isInUseMemo(node)) {
+          } else if (isInUseMemo(node)) {
+            return context.report({
+              node,
+              message: PROXY_RENDER_PHASE_MESSAGE,
+            })
+          } else if (isInComponentBody(node)) {
             return context.report({
               node,
               message: PROXY_RENDER_PHASE_MESSAGE,
@@ -488,6 +493,116 @@ function getRootIdentifierName(node) {
     return getRootIdentifierName(node.object)
   }
   return null
+}
+
+function isInComponentBody(node) {
+  // Check if we're inside a React component function
+  const componentFunction = findParentComponent(node)
+  if (!componentFunction) {
+    return false
+  }
+
+  // Don't flag if we're in JSX (render phase is handled separately)
+  if (isInJSXContainer(node)) {
+    return false
+  }
+
+  // Don't flag if we're in a React hook
+  if (isInReactHooks(node)) {
+    return false
+  }
+
+  // Don't flag if we're in a callback function (event handlers, etc.)
+  if (isInCallback(node)) {
+    return false
+  }
+
+  // Don't flag if we're in a return statement (render phase)
+  if (isInReturnStatement(node)) {
+    return false
+  }
+
+  // Don't flag if we're being passed to useSnapshot
+  if (isPassedToUseSnapshot(node)) {
+    return false
+  }
+
+  // If we're directly in the component body (not in any of the above), flag it
+  return true
+}
+
+function isPassedToUseSnapshot(node) {
+  // Check if the node is an argument to useSnapshot
+  let current = node.parent
+  while (current) {
+    if (
+      current.type === 'CallExpression' &&
+      current.callee &&
+      current.callee.name === 'useSnapshot'
+    ) {
+      // Check if our node is one of the arguments
+      return current.arguments.some((arg) => {
+        return isNodeWithinArgument(node, arg)
+      })
+    }
+    current = current.parent
+  }
+  return false
+}
+
+function isNodeWithinArgument(node, argument) {
+  let current = node
+  while (current && current !== argument.parent) {
+    if (current === argument) {
+      return true
+    }
+    current = current.parent
+  }
+  return false
+}
+
+function findParentComponent(node) {
+  let current = node
+  while (current && current.parent) {
+    current = current.parent
+
+    // Check for arrow function component
+    if (current.type === 'ArrowFunctionExpression') {
+      const varDef = getParentOfNodeType(current, 'VariableDeclarator')
+      if (varDef && varDef.id && varDef.id.name) {
+        const name = varDef.id.name
+        if (isComponentName(name)) {
+          return current
+        }
+      }
+    }
+
+    // Check for function declaration component
+    if (current.type === 'FunctionDeclaration') {
+      if (current.id && current.id.name && isComponentName(current.id.name)) {
+        return current
+      }
+    }
+
+    // Check for function expression component
+    if (current.type === 'FunctionExpression') {
+      if (current.id && current.id.name && isComponentName(current.id.name)) {
+        return current
+      }
+    }
+  }
+  return null
+}
+
+function isInReturnStatement(node) {
+  let current = node
+  while (current && current.parent) {
+    if (current.parent.type === 'ReturnStatement') {
+      return true
+    }
+    current = current.parent
+  }
+  return false
 }
 
 function isNodeInsideFunction(node, functionNode) {
