@@ -294,6 +294,24 @@ function which(name, scope) {
     const def = variable.defs[0]
     if (!def || variable.name !== name) return
 
+    // Handle imported variables
+    if (def.type === 'ImportBinding') {
+      // For imported variables, we can't know for certain if they're proxies
+      // but we can make educated guesses based on naming patterns.
+      // Check if the variable name or import source suggests it's a proxy
+      const variableName = variable.name.toLowerCase()
+      const isProxyLikeImport =
+        variableName.includes('proxy') ||
+        variableName.includes('state') ||
+        variableName.includes('store')
+
+      if (isProxyLikeImport) {
+        return (kind = 'state')
+      }
+      // For other imports, don't assume they're proxy states
+      return kind
+    }
+
     const init = def.node.init
     if (!init) return
     if (init.type === 'Identifier') {

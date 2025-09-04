@@ -327,8 +327,139 @@ ruleTester.run('state-snapshot-rule', rule, {
     },[foo])
   }
   `,
+    // Valid: imported proxy used in event handler (not render phase)
+    `
+     import { state } from './store'
+     function Counter() {
+       const handleClick = () => {
+         state.count += 1
+       }
+       return (
+         <div>
+           <button onClick={handleClick}>+1</button>
+         </div>
+       )
+     }
+     `,
+    // Valid: imported proxy used in useEffect
+    `
+     import { state } from './store'
+     function Counter() {
+       const snap = useSnapshot(state)
+       useEffect(() => {
+         state.count = 0
+       }, [])
+       return <div>{snap.count}</div>
+     }
+     `,
+    // Valid: non-proxy import used in render (should not trigger error)
+    `
+     import { data } from './api'
+     function Component() {
+       return (
+         <div>
+           {data.value}
+         </div>
+       )
+     }
+     `,
+    // Valid: regular import with non-proxy name
+    `
+     import { config } from './settings'
+     function Component() {
+       return (
+         <div style={{ color: config.theme.color }}>
+           Content
+         </div>
+       )
+     }
+     `,
   ],
   invalid: [
+    // Test case for imported proxy - should trigger PROXY_RENDER_PHASE_MESSAGE
+    {
+      code: `
+     import { state } from './store'
+     function Counter() {
+       return (
+         <div>
+           {state.count}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for default imported proxy
+    {
+      code: `
+     import store from './store'
+     function Counter() {
+       return (
+         <div>
+           {store.count}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for renamed imported proxy
+    {
+      code: `
+     import { state as appState } from './store'
+     function Counter() {
+       return (
+         <div>
+           {appState.count}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for namespace imported proxy
+    {
+      code: `
+     import * as store from './store'
+     function Counter() {
+       return (
+         <div>
+           {store.state.count}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for imported variable with 'proxy' in name
+    {
+      code: `
+     import { userProxy } from './store'
+     function Counter() {
+       return (
+         <div>
+           {userProxy.name}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for imported variable with 'store' in name
+    {
+      code: `
+     import { userStore } from './store'
+     function Counter() {
+       return (
+         <div>
+           {userStore.count}
+         </div>
+       )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
     {
       code: `
      const state = proxy({ count: 0})
