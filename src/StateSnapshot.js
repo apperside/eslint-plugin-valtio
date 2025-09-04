@@ -102,6 +102,13 @@ export default {
               message: PROXY_RENDER_PHASE_MESSAGE,
             })
           }
+
+          if (isInUseMemo(node)) {
+            return context.report({
+              node,
+              message: PROXY_RENDER_PHASE_MESSAGE,
+            })
+          }
         }
 
         if (kind === 'snapshot') {
@@ -430,6 +437,68 @@ function isInRender(node) {
 
   const isCallbackInJSX = isInJSXContainer(nearestCallbackNode)
   return isInJSXContainer(node) && !isCallbackInJSX
+}
+
+function isInUseMemo(node) {
+  // Check if the node is inside a useMemo callback
+  let current = node
+  while (current && current.parent) {
+    current = current.parent
+    if (
+      current.type === 'CallExpression' &&
+      current.callee &&
+      current.callee.name === 'useMemo'
+    ) {
+      // Check if our original node is inside the first argument (callback) of useMemo
+      const callback = current.arguments[0]
+      const dependencies = current.arguments[1]
+
+      if (callback && isNodeInsideFunction(node, callback)) {
+        // Check if the proxy is properly included in the dependency array
+        if (dependencies && dependencies.type === 'ArrayExpression') {
+          // Check if the node's root identifier is in the dependencies
+          const nodeIdentifier = getRootIdentifierName(node)
+          const isInDeps = dependencies.elements.some((dep) => {
+            if (dep.type === 'Identifier') {
+              return dep.name === nodeIdentifier
+            }
+            if (dep.type === 'MemberExpression') {
+              const depIdentifier = getRootIdentifierName(dep)
+              return depIdentifier === nodeIdentifier
+            }
+            return false
+          })
+
+          // Only flag as error if NOT in dependencies
+          return !isInDeps
+        }
+        // If no dependency array, it's definitely an error
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function getRootIdentifierName(node) {
+  if (node.type === 'Identifier') {
+    return node.name
+  }
+  if (node.type === 'MemberExpression') {
+    return getRootIdentifierName(node.object)
+  }
+  return null
+}
+
+function isNodeInsideFunction(node, functionNode) {
+  let current = node
+  while (current && current.parent) {
+    if (current === functionNode) {
+      return true
+    }
+    current = current.parent
+  }
+  return false
 }
 
 function isLiteral(node) {

@@ -374,6 +374,28 @@ ruleTester.run('state-snapshot-rule', rule, {
        )
      }
      `,
+    // Valid: useMemo with snapshot (not proxy) - should not trigger error
+    `
+     const state = proxy({ count: 0 })
+     function Counter() {
+       const snap = useSnapshot(state)
+       const doubled = useMemo(() => {
+         return snap.count * 2
+       }, [snap.count])
+       return <div>{doubled}</div>
+     }
+     `,
+    // Valid: useMemo with imported snapshot - should not trigger error
+    `
+     import { state } from './store'
+     function Counter() {
+       const snap = useSnapshot(state)
+       const doubled = useMemo(() => {
+         return snap.count * 2
+       }, [snap.count])
+       return <div>{doubled}</div>
+     }
+     `,
   ],
   invalid: [
     // Test case for imported proxy - should trigger PROXY_RENDER_PHASE_MESSAGE
@@ -456,6 +478,32 @@ ruleTester.run('state-snapshot-rule', rule, {
            {userStore.count}
          </div>
        )
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for proxy used in useMemo - should trigger error
+    {
+      code: `
+     const state = proxy({ count: 0 })
+     function Counter() {
+       const doubled = useMemo(() => {
+         return state.count * 2
+       }, [])
+       return <div>{doubled}</div>
+     }
+     `,
+      errors: [PROXY_RENDER_PHASE_MESSAGE],
+    },
+    // Test case for imported proxy used in useMemo - should trigger error
+    {
+      code: `
+     import { state } from './store'
+     function Counter() {
+       const doubled = useMemo(() => {
+         return state.count * 2
+       }, [])
+       return <div>{doubled}</div>
      }
      `,
       errors: [PROXY_RENDER_PHASE_MESSAGE],

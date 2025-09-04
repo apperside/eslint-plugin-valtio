@@ -455,6 +455,13 @@ var StateSnapshot = {
               message: PROXY_RENDER_PHASE_MESSAGE,
             })
           }
+
+          if (isInUseMemo(node)) {
+            return context.report({
+              node: node,
+              message: PROXY_RENDER_PHASE_MESSAGE,
+            })
+          }
         }
 
         if (kind === 'snapshot') {
@@ -774,6 +781,78 @@ function isInRender(node) {
 
   var isCallbackInJSX = isInJSXContainer(nearestCallbackNode)
   return isInJSXContainer(node) && !isCallbackInJSX
+}
+
+function isInUseMemo(node) {
+  var current = node
+
+  while (current && current.parent) {
+    current = current.parent
+
+    if (
+      current.type === 'CallExpression' &&
+      current.callee &&
+      current.callee.name === 'useMemo'
+    ) {
+      var callback = current.arguments[0]
+      var dependencies = current.arguments[1]
+
+      if (callback && isNodeInsideFunction(node, callback)) {
+        if (dependencies && dependencies.type === 'ArrayExpression') {
+          var _ret = (function () {
+            var nodeIdentifier = getRootIdentifierName(node)
+            var isInDeps = dependencies.elements.some(function (dep) {
+              if (dep.type === 'Identifier') {
+                return dep.name === nodeIdentifier
+              }
+
+              if (dep.type === 'MemberExpression') {
+                var depIdentifier = getRootIdentifierName(dep)
+                return depIdentifier === nodeIdentifier
+              }
+
+              return false
+            })
+            return {
+              v: !isInDeps,
+            }
+          })()
+
+          if (typeof _ret === 'object') return _ret.v
+        }
+
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function getRootIdentifierName(node) {
+  if (node.type === 'Identifier') {
+    return node.name
+  }
+
+  if (node.type === 'MemberExpression') {
+    return getRootIdentifierName(node.object)
+  }
+
+  return null
+}
+
+function isNodeInsideFunction(node, functionNode) {
+  var current = node
+
+  while (current && current.parent) {
+    if (current === functionNode) {
+      return true
+    }
+
+    current = current.parent
+  }
+
+  return false
 }
 
 function isLiteral(node) {
