@@ -313,9 +313,7 @@ function which(name, scope) {
       // Check if the variable name or import source suggests it's a proxy
       const variableName = variable.name.toLowerCase()
       const isProxyLikeImport =
-        variableName.includes('proxy') ||
-        variableName.includes('state') ||
-        variableName.includes('store')
+        variableName.includes('proxy') || variableName.includes('store')
 
       if (isProxyLikeImport) {
         return (kind = 'state')

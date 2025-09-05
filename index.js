@@ -504,7 +504,7 @@ function which(name, scope) {
 
     if (def.type === 'ImportBinding') {
       var variableName = variable.name.toLowerCase();
-      var isProxyLikeImport = variableName.includes('proxy') || variableName.includes('state') || variableName.includes('store');
+      var isProxyLikeImport = variableName.includes('proxy') || variableName.includes('store');
 
       if (isProxyLikeImport) {
         return kind = 'state';
